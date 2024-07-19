@@ -24,11 +24,14 @@ from pathlib import Path
 
 from PPDB import Ppdb
 from nltk.tokenize import word_tokenize
+import tensorflow as tf
+
 
 # OPTIONAL: if you want to have more information on what's happening, activate the logger as follows
 import numpy as np
 import torch
 import nltk
+
 
 from nltk.stem import PorterStemmer
 
