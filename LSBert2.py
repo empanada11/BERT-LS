@@ -1,7 +1,5 @@
-#!/usr/bin/env python
+#!/usr/bin/python
 # -*- coding: UTF-8 -*-
-
-
 
 import argparse
 import csv
@@ -24,14 +22,11 @@ from pathlib import Path
 
 from PPDB import Ppdb
 from nltk.tokenize import word_tokenize
-import tensorflow as tf
-
 
 # OPTIONAL: if you want to have more information on what's happening, activate the logger as follows
 import numpy as np
 import torch
 import nltk
-
 
 from nltk.stem import PorterStemmer
 
@@ -788,7 +783,7 @@ def main():
 
 
     if args.local_rank == -1 or args.no_cuda:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
         n_gpu = torch.cuda.device_count()
     else:
         torch.cuda.set_device(args.local_rank)
@@ -814,24 +809,24 @@ def main():
     
     model.to(device)
 
-    output_sr_file = open('/content/features.txt', "a+")
+    output_sr_file = open(args.output_SR_file,"a+")
 
     print("Loading embeddings ...")
     
-    wordVecPath = '/content/BERT-LS/crawl-300d-2M-subword.vec'
+    wordVecPath = args.word_embeddings
     #wordVecPath = "/media/qiang/ee63f41d-4004-44fe-bcfd-522df9f2eee8/glove.840B.300d.txt"
 
     fasttext_dico, fasttext_emb = getWordmap(wordVecPath)
 
     #stopword = set(stopwords.words('english'))
-    word_count_path = '/content/BERT-LS/SUBTLEX_frequency.xlsx'
+    word_count_path = args.word_frequency
     #word_count_path = "word_frequency_wiki.txt"
     word_count = getWordCount(word_count_path)
 
     ps = PorterStemmer()
 
     print("loading PPDB ...")
-    ppdb_path = '/content/BERT-LS/ppdb-2.0-tldr'
+    ppdb_path = args.ppdb
     ppdb_model = Ppdb(ppdb_path)
 
     CGBERT = []
@@ -891,9 +886,9 @@ def main():
 
             attention_mask = torch.tensor([feature.input_mask])
 
-            tokens_tensor = tokens_tensor.to('cuda')
-            token_type_ids = token_type_ids.to('cuda')
-            attention_mask = attention_mask.to('cuda')
+            tokens_tensor = tokens_tensor.to(device)
+            token_type_ids = token_type_ids.to(device)
+            attention_mask = attention_mask.to(device)
 
                 # Predict all tokens
             with torch.no_grad():
