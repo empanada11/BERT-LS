@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 
 
@@ -788,7 +788,7 @@ def main():
 
 
     if args.local_rank == -1 or args.no_cuda:
-        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         n_gpu = torch.cuda.device_count()
     else:
         torch.cuda.set_device(args.local_rank)
@@ -814,24 +814,24 @@ def main():
     
     model.to(device)
 
-    output_sr_file = open(args.output_SR_file,"a+")
+    output_sr_file = open('/content/features.txt', "a+")
 
     print("Loading embeddings ...")
     
-    wordVecPath = args.word_embeddings
+    wordVecPath = '/content/BERT-LS/crawl-300d-2M-subword.vec'
     #wordVecPath = "/media/qiang/ee63f41d-4004-44fe-bcfd-522df9f2eee8/glove.840B.300d.txt"
 
     fasttext_dico, fasttext_emb = getWordmap(wordVecPath)
 
     #stopword = set(stopwords.words('english'))
-    word_count_path = args.word_frequency
+    word_count_path = '/content/BERT-LS/SUBTLEX_frequency.xlsx'
     #word_count_path = "word_frequency_wiki.txt"
     word_count = getWordCount(word_count_path)
 
     ps = PorterStemmer()
 
     print("loading PPDB ...")
-    ppdb_path = args.ppdb
+    ppdb_path = '/content/BERT-LS/ppdb-2.0-tldr'
     ppdb_model = Ppdb(ppdb_path)
 
     CGBERT = []
@@ -965,4 +965,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
