@@ -801,11 +801,12 @@ def main():
     if  not args.do_eval:
         raise ValueError("At least `do_eval` must be True.")
 
-    tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
+    tokenizer = BertTokenizer.from_pretrained('bert-large-uncased-whole-word-masking', do_lower_case=args.do_lower_case)
+
 
 
     # Prepare model
-    model = BertForMaskedLM.from_pretrained(args.bert_model,output_attentions=True)
+    model = BertForMaskedLM.from_pretrained('bert-large-uncased-whole-word-masking', output_attentions=True)
     
     model.to(device)
 
