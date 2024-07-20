@@ -9,8 +9,10 @@ import math
 import sys
 import re
 
-from pytorch_pretrained_bert.tokenization import BertTokenizer
-from pytorch_pretrained_bert.modeling import BertModel, BertForMaskedLM
+#from pytorch_pretrained_bert.tokenization import BertTokenizer
+#from pytorch_pretrained_bert.modeling import BertModel, BertForMaskedLM
+from transformers import BertTokenizer, BertForMaskedLM
+
 
 from sklearn.metrics.pairwise import cosine_similarity as cosine
 
@@ -838,103 +840,84 @@ def main():
 
     window_context = 11
 
+# Inside the main() function
+
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
-        
-     
         fileName = args.eval_dir.split('/')[-1][:-4]
-        if fileName=='lex.mturk':
+        if fileName == 'lex.mturk':
             eval_examples, mask_words, mask_labels = read_eval_dataset(args.eval_dir)
         else:
             eval_examples, mask_words, mask_labels = read_eval_index_dataset(args.eval_dir)
-
-       
+    
         eval_size = len(eval_examples)
         print("***** Running evaluation *****")
         print("  Num examples = %d", eval_size)
-        #logger.info("  Batch size = %d", args.eval_batch_size)
-
+    
         model.eval()
-
+    
         for i in range(eval_size):
-
-            print('Sentence {} rankings: '.format(i))
-            #output_sr_file.write(str(i))
-            #output_sr_file.write(' sentence: ')
-            #output_sr_file.write('\n')
-            print(eval_examples[i])
-            print(mask_words[i])
-            
-            tokens, words, position = convert_sentence_to_token(eval_examples[i], args.max_seq_length, tokenizer)
-
-            assert len(words)==len(position)
-
-            mask_index = words.index(mask_words[i])
-
-            mask_context = extract_context(words,mask_index,window_context)
-
-            len_tokens = len(tokens)
-
-            mask_position = position[mask_index]
- 
-            if isinstance(mask_position,list):
-                feature = convert_whole_word_to_feature(tokens, mask_position, args.max_seq_length, tokenizer, args.prob_mask)
-            else:
-                feature = convert_token_to_feature(tokens, mask_position, args.max_seq_length, tokenizer, args.prob_mask)
-
-            tokens_tensor = torch.tensor([feature.input_ids])
-
-            token_type_ids = torch.tensor([feature.input_type_ids])
-
-            attention_mask = torch.tensor([feature.input_mask])
-
-            tokens_tensor = tokens_tensor.to(device)
-            token_type_ids = token_type_ids.to(device)
-            attention_mask = attention_mask.to(device)
-
-                # Predict all tokens
-            with torch.no_grad():
-                all_attentions,prediction_scores = model(tokens_tensor, token_type_ids,attention_mask)
-
-            if isinstance(mask_position,list):
-                predicted_top = prediction_scores[0, mask_position[0]].topk(80)
-            else:
-                predicted_top = prediction_scores[0, mask_position].topk(80)
-                #print(predicted_top[0].cpu().numpy())
-            pre_tokens = tokenizer.convert_ids_to_tokens(predicted_top[1].cpu().numpy())
-            
-            #print(predicted_top[0].cpu().numpy())
-
-            sentence = eval_examples[i].lower()
-            words = word_tokenize(sentence)
-
-            words_tag = nltk.pos_tag(words)
-
-            complex_word_index = words.index(mask_words[i])
-
-            complex_word_tag = words_tag[complex_word_index][1]
-
-   
-
-            complex_word_tag = preprocess_tag(complex_word_tag)
-            
-            cgPPDB = ppdb_model.predict(mask_words[i],complex_word_tag)
-
-            cgBERT = BERT_candidate_generation(mask_words[i], pre_tokens, predicted_top[0].cpu().numpy(), ps, args.num_selections)
-
-            print(cgBERT)
-            
-            CGBERT.append(cgBERT)
-          
-            pre_word = substitution_ranking(mask_words[i], mask_context, cgBERT, fasttext_dico, fasttext_emb,word_count,cgPPDB,tokenizer,model,mask_labels[i])
-
-
-            substitution_words.append(pre_word)
-
-        
-        potential,precision,recall,F_score=evaulation_SS_scores(CGBERT, mask_labels)
+            try:
+                print('Sentence {} rankings: '.format(i))
+                print(eval_examples[i])
+                print(mask_words[i])
+    
+                tokens, words, position = convert_sentence_to_token(eval_examples[i], args.max_seq_length, tokenizer)
+                assert len(words) == len(position)
+    
+                mask_index = words.index(mask_words[i])
+                mask_context = extract_context(words, mask_index, window_context)
+    
+                len_tokens = len(tokens)
+                mask_position = position[mask_index]
+    
+                # Check the type of mask_position
+                if not isinstance(mask_position, (list, int)):
+                    print(f"Skipping sentence {i} due to invalid mask_position type: {type(mask_position)}")
+                    continue
+    
+                if isinstance(mask_position, list):
+                    feature = convert_whole_word_to_feature(tokens, mask_position, args.max_seq_length, tokenizer, args.prob_mask)
+                else:
+                    feature = convert_token_to_feature(tokens, mask_position, args.max_seq_length, tokenizer, args.prob_mask)
+    
+                tokens_tensor = torch.tensor([feature.input_ids])
+                token_type_ids = torch.tensor([feature.input_type_ids])
+                attention_mask = torch.tensor([feature.input_mask])
+    
+                tokens_tensor = tokens_tensor.to(device)
+                token_type_ids = token_type_ids.to(device)
+                attention_mask = attention_mask.to(device)
+    
+                with torch.no_grad():
+                    all_attentions, prediction_scores = model(tokens_tensor, token_type_ids, attention_mask)
+    
+                # Handle both list and integer cases for mask_position
+                if isinstance(mask_position, list):
+                    predicted_top = prediction_scores[0, mask_position[0]].topk(80)
+                else:
+                    predicted_top = prediction_scores[0, mask_position].topk(80)
+    
+                pre_tokens = tokenizer.convert_ids_to_tokens(predicted_top[1].cpu().numpy())
+                sentence = eval_examples[i].lower()
+                words = word_tokenize(sentence)
+                words_tag = nltk.pos_tag(words)
+                complex_word_index = words.index(mask_words[i])
+                complex_word_tag = words_tag[complex_word_index][1]
+                complex_word_tag = preprocess_tag(complex_word_tag)
+                cgPPDB = ppdb_model.predict(mask_words[i], complex_word_tag)
+                cgBERT = BERT_candidate_generation(mask_words[i], pre_tokens, predicted_top[0].cpu().numpy(), ps, args.num_selections)
+                print(cgBERT)
+                CGBERT.append(cgBERT)
+                pre_word = substitution_ranking(mask_words[i], mask_context, cgBERT, fasttext_dico, fasttext_emb, word_count, cgPPDB, tokenizer, model, mask_labels[i])
+                substitution_words.append(pre_word)
+    
+            except Exception as e:
+                print(f"Skipping sentence {i} due to error: {e}")
+    
+        potential, precision, recall, F_score = evaulation_SS_scores(CGBERT, mask_labels)
         print("The score of evaluation for BERT candidate generation")
-        print(potential,precision,recall,F_score)
-
+        print(potential, precision, recall, F_score)
+    
         output_sr_file.write(str(args.num_selections))
         output_sr_file.write('\t')
         output_sr_file.write(str(potential))
@@ -945,19 +928,18 @@ def main():
         output_sr_file.write('\t')
         output_sr_file.write(str(F_score))
         output_sr_file.write('\t')
-        
-
-        precision,accuracy,changed_proportion=evaulation_pipeline_scores(substitution_words, mask_words, mask_labels)
-       	print("The score of evaluation for full LS pipeline")
-        print(precision,accuracy,changed_proportion)
+    
+        precision, accuracy, changed_proportion = evaulation_pipeline_scores(substitution_words, mask_words, mask_labels)
+        print("The score of evaluation for full LS pipeline")
+        print(precision, accuracy, changed_proportion)
         output_sr_file.write(str(precision))
         output_sr_file.write('\t')
         output_sr_file.write(str(accuracy))
         output_sr_file.write('\t')
         output_sr_file.write(str(changed_proportion))
         output_sr_file.write('\n')
-
-        output_sr_file.close()
+    
+    output_sr_file.close()
 
 if __name__ == "__main__":
     main()
