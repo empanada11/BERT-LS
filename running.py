@@ -1,13 +1,12 @@
 import argparse
+import json
 import torch
 import numpy as np
 import nltk
 from transformers import BertTokenizer, BertForMaskedLM
-from datasets import load_dataset
 from nltk.stem import PorterStemmer
 
 class InputFeatures(object):
-    """A single set of features of data."""
     def __init__(self, input_ids, input_mask, input_type_ids):
         self.input_ids = input_ids
         self.input_mask = input_mask
@@ -47,9 +46,9 @@ def BERT_candidate_generation(source_word, pre_tokens, num_selection=10):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--eval_dir", default=None, type=str, required=True, help="The evaluation data dir.")
+    parser.add_argument("--eval_file", default=None, type=str, required=True, help="The evaluation data file (JSON).")
     parser.add_argument("--bert_model", default="bert-base-uncased", type=str, required=True, help="Bert pre-trained model.")
-    parser.add_argument("--output_SR_file", default=None, type=str, required=True, help="The output directory of writing substitution selection.")
+    parser.add_argument("--output_SR_file", default=None, type=str, required=True, help="The output file for writing substitution selection.")
     parser.add_argument("--max_seq_length", default=128, type=int, help="The maximum total input sequence length.")
     parser.add_argument("--num_selections", default=10, type=int, help="Total number of selections.")
     parser.add_argument("--do_lower_case", action='store_true', help="Set this flag if you are using an uncased model.")
@@ -60,31 +59,41 @@ def main():
     model = BertForMaskedLM.from_pretrained(args.bert_model)
     model.to(device)
 
-    eval_data = load_dataset('glue', 'sst2')['validation']
+    with open(args.eval_file, 'r') as file:
+        eval_data = json.load(file)
 
     output_sr_file = open(args.output_SR_file, "w")
 
     for example in eval_data:
-        sentence = example['sentence']
-        tokens, words = convert_sentence_to_token(sentence, tokenizer)
-        feature = convert_token_to_feature(tokens, args.max_seq_length, tokenizer, 0.5)
+        abstract = example['Abstract']
+        sentences = nltk.sent_tokenize(abstract)
+        
+        simplified_sentences = []
+        
+        for sentence in sentences:
+            tokens, words = convert_sentence_to_token(sentence, tokenizer)
+            feature = convert_token_to_feature(tokens, args.max_seq_length, tokenizer, 0.5)
 
-        tokens_tensor = torch.tensor([feature.input_ids]).to(device)
-        attention_mask = torch.tensor([feature.input_mask]).to(device)
-        token_type_ids = torch.tensor([feature.input_type_ids]).to(device)
+            tokens_tensor = torch.tensor([feature.input_ids]).to(device)
+            attention_mask = torch.tensor([feature.input_mask]).to(device)
+            token_type_ids = torch.tensor([feature.input_type_ids]).to(device)
 
-        with torch.no_grad():
-            outputs = model(input_ids=tokens_tensor, attention_mask=attention_mask, token_type_ids=token_type_ids)
-        prediction_scores = outputs.logits
+            with torch.no_grad():
+                outputs = model(input_ids=tokens_tensor, attention_mask=attention_mask, token_type_ids=token_type_ids)
+            prediction_scores = outputs.logits
 
-        top_k = prediction_scores[0].topk(args.num_selections)
-        pre_tokens = tokenizer.convert_ids_to_tokens(top_k.indices[0].tolist())
+            top_k = prediction_scores[0].topk(args.num_selections)
+            pre_tokens = tokenizer.convert_ids_to_tokens(top_k.indices[0].tolist())
 
-        source_word = words[0]  # Placeholder for source word
-        cgBERT = BERT_candidate_generation(source_word, pre_tokens, args.num_selections)
+            source_word = words[0]  # Placeholder for source word, you can implement a logic to identify complex words
+            cgBERT = BERT_candidate_generation(source_word, pre_tokens, args.num_selections)
 
-        output_sr_file.write(f"Sentence: {sentence}\n")
-        output_sr_file.write(f"Candidates: {', '.join(cgBERT)}\n\n")
+            # For simplicity, just join candidates as a string. This should be extended for actual use.
+            simplified_sentences.append(' '.join(cgBERT))
+
+        simplified_abstract = ' '.join(simplified_sentences)
+        output_sr_file.write(f"Original Abstract: {abstract}\n")
+        output_sr_file.write(f"Simplified Abstract: {simplified_abstract}\n\n")
 
     output_sr_file.close()
 
