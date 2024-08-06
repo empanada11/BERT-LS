@@ -399,18 +399,15 @@ def substitution_ranking(source_word, source_context, substitution_selection, fa
     return pre_word
 
 def evaulation_SS_scores(ss, labels):
-    if len(ss) == 0 or len(labels) == 0:
-        return 0, 0, 0, 0
-
     assert len(ss) == len(labels)
-
+    
     potential = 0
     instances = len(ss)
     precision = 0
     precision_all = 0
     recall = 0
     recall_all = 0
-
+    
     for i in range(len(ss)):
         common = list(set(ss[i]).intersection(labels[i]))
         if len(common) >= 1:
@@ -419,15 +416,14 @@ def evaulation_SS_scores(ss, labels):
         recall += len(common)
         precision_all += len(ss[i])
         recall_all += len(labels[i])
-
-    if instances == 0:
-        return 0, 0, 0, 0
-
+    
     potential /= instances
-    precision /= precision_all
-    recall /= recall_all
-    F_score = 2 * precision * recall / (precision + recall)
+    precision = precision / precision_all if precision_all != 0 else 0
+    recall = recall / recall_all if recall_all != 0 else 0
+    F_score = 2 * precision * recall / (precision + recall) if (precision + recall) != 0 else 0
+    
     return potential, precision, recall, F_score
+
 
 
 def evaulation_pipeline_scores(substitution_words, source_words, gold_words):
@@ -583,7 +579,7 @@ def main():
         valid_mask_labels = [x for x in mask_labels if x]
 
         if valid_mask_labels:
-            potential, precision, recall, F_score = evaulation_SS_scores(CGBERT, valid_mask_labels)
+            potential, precision, recall, F_score = evaulation_SS_scores([x for x in CGBERT if x], valid_mask_labels)
             print("The score of evaluation for BERT candidate generation")
             print(potential, precision, recall, F_score)
             output_sr_file.write(str(args.num_selections))
