@@ -29,36 +29,41 @@ class InputFeatures(object):
 def convert_sentence_to_token(sentence, seq_length, tokenizer):
     tokenized_text = tokenizer.tokenize(sentence.lower())
     assert len(tokenized_text) < seq_length - 2
+
     nltk_sent = nltk.word_tokenize(sentence.lower())
     position2 = []
+
     token_index = 0
     start_pos = len(tokenized_text) + 2
+
     pre_word = ""
     for i, word in enumerate(nltk_sent):
         if word == "n't" and pre_word[-1] == "n":
             word = "'t"
-        if tokenized_text[token_index] == "\"":
-            len_token = 2
-        else:
-            len_token = len(tokenized_text[token_index])
+
+        len_token = len(tokenized_text[token_index]) if tokenized_text[token_index] != "\"" else 2
+
         if tokenized_text[token_index] == word or len_token >= len(word):
             position2.append(start_pos + token_index)
             pre_word = tokenized_text[token_index]
             token_index += 1
         else:
-            new_pos = []
-            new_pos.append(start_pos + token_index)
+            new_pos = [start_pos + token_index]
             new_word = tokenized_text[token_index]
+
             while new_word != word:
                 token_index += 1
                 new_word += tokenized_text[token_index].replace('##', '')
                 new_pos.append(start_pos + token_index)
+
                 if len(new_word) == len(word):
                     break
             token_index += 1
             pre_word = new_word
             position2.append(new_pos)
+    
     return tokenized_text, nltk_sent, position2
+
 
 def convert_whole_word_to_feature(tokens_a, mask_position, seq_length, tokenizer, prob_mask):
     tokens = []
@@ -114,37 +119,53 @@ def convert_token_to_feature(tokens_a, mask_position, seq_length, tokenizer, pro
     input_type_ids = []
     tokens.append("[CLS]")
     input_type_ids.append(0)
+
     len_tokens = len(tokens_a)
     first_sentence_mask_random = random.sample(range(0, len_tokens), int(prob_mask * len_tokens))
+
     for i in range(len_tokens):
-        if i == (mask_position - len_tokens - 2):
-            tokens.append(tokens_a[i])
-        elif i in first_sentence_mask_random:
-            tokens.append('[MASK]')
+        if isinstance(mask_position, list):
+            if i in [pos - len_tokens - 2 for pos in mask_position]:
+                tokens.append(tokens_a[i])
+            elif i in first_sentence_mask_random:
+                tokens.append('[MASK]')
+            else:
+                tokens.append(tokens_a[i])
         else:
-            tokens.append(tokens_a[i])
+            if i == (mask_position - len_tokens - 2):
+                tokens.append(tokens_a[i])
+            elif i in first_sentence_mask_random:
+                tokens.append('[MASK]')
+            else:
+                tokens.append(tokens_a[i])
         input_type_ids.append(0)
+    
     tokens.append("[SEP]")
     input_type_ids.append(0)
+
     for token in tokens_a:
         tokens.append(token)
         input_type_ids.append(1)
+
     tokens.append("[SEP]")
     input_type_ids.append(1)
-    true_word = ''
-    true_word = tokens[mask_position]
-    tokens[mask_position] = '[MASK]'
+
+    true_word = tokens[mask_position] if not isinstance(mask_position, list) else '[MASK]'
+    if not isinstance(mask_position, list):
+        tokens[mask_position] = '[MASK]'
+
     input_ids = tokenizer.convert_tokens_to_ids(tokens)
     input_mask = [1] * len(input_ids)
+
     while len(input_ids) < seq_length:
         input_ids.append(0)
         input_mask.append(0)
         input_type_ids.append(0)
-    if len(input_ids) > seq_length:
-        print(len(input_ids))
+
     assert len(input_ids) == seq_length
     assert len(input_mask) == seq_length
     assert len(input_type_ids) == seq_length
+
     return InputFeatures(unique_id=0, tokens=tokens, input_ids=input_ids, input_mask=input_mask, input_type_ids=input_type_ids)
 
 def getWordmap(wordVecPath):
@@ -556,36 +577,37 @@ def main():
                 substitution_words.append(pre_word)
             except Exception as e:
                 print(f"Skipping sentence {i} due to error: {e}")
-                CGBERT.append(None)
+                CGBERT.append([])
                 substitution_words.append(mask_words[i])
 
-        # Filter out None values
-        valid_CGBERT = [x for x in CGBERT if x is not None]
-        valid_mask_labels = [x for x in mask_labels if x is not None]
+        valid_mask_labels = [x for x in mask_labels if x]
 
-        potential, precision, recall, F_score = evaulation_SS_scores(valid_CGBERT, valid_mask_labels)
-        print("The score of evaluation for BERT candidate generation")
-        print(potential, precision, recall, F_score)
-        output_sr_file.write(str(args.num_selections))
-        output_sr_file.write('\t')
-        output_sr_file.write(str(potential))
-        output_sr_file.write('\t')
-        output_sr_file.write(str(precision))
-        output_sr_file.write('\t')
-        output_sr_file.write(str(recall))
-        output_sr_file.write('\t')
-        output_sr_file.write(str(F_score))
-        output_sr_file.write('\t')
-        precision, accuracy, changed_proportion = evaulation_pipeline_scores(substitution_words, mask_words, mask_labels)
-        print("The score of evaluation for full LS pipeline")
-        print(precision, accuracy, changed_proportion)
-        output_sr_file.write(str(precision))
-        output_sr_file.write('\t')
-        output_sr_file.write(str(accuracy))
-        output_sr_file.write('\t')
-        output_sr_file.write(str(changed_proportion))
-        output_sr_file.write('\n')
-        output_sr_file.close()
+        if valid_mask_labels:
+            potential, precision, recall, F_score = evaulation_SS_scores(CGBERT, valid_mask_labels)
+            print("The score of evaluation for BERT candidate generation")
+            print(potential, precision, recall, F_score)
+            output_sr_file.write(str(args.num_selections))
+            output_sr_file.write('\t')
+            output_sr_file.write(str(potential))
+            output_sr_file.write('\t')
+            output_sr_file.write(str(precision))
+            output_sr_file.write('\t')
+            output_sr_file.write(str(recall))
+            output_sr_file.write('\t')
+            output_sr_file.write(str(F_score))
+            output_sr_file.write('\t')
+            precision, accuracy, changed_proportion = evaulation_pipeline_scores(substitution_words, mask_words, mask_labels)
+            print("The score of evaluation for full LS pipeline")
+            print(precision, accuracy, changed_proportion)
+            output_sr_file.write(str(precision))
+            output_sr_file.write('\t')
+            output_sr_file.write(str(accuracy))
+            output_sr_file.write('\t')
+            output_sr_file.write(str(changed_proportion))
+            output_sr_file.write('\n')
+            output_sr_file.close()
+        else:
+            print("No valid sentences to evaluate")
 
 if __name__ == "__main__":
     main()
