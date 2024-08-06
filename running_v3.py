@@ -378,13 +378,18 @@ def substitution_ranking(source_word, source_context, substitution_selection, fa
     return pre_word
 
 def evaulation_SS_scores(ss, labels):
+    if len(ss) == 0 or len(labels) == 0:
+        return 0, 0, 0, 0
+
     assert len(ss) == len(labels)
+
     potential = 0
     instances = len(ss)
     precision = 0
     precision_all = 0
     recall = 0
     recall_all = 0
+
     for i in range(len(ss)):
         common = list(set(ss[i]).intersection(labels[i]))
         if len(common) >= 1:
@@ -393,11 +398,16 @@ def evaulation_SS_scores(ss, labels):
         recall += len(common)
         precision_all += len(ss[i])
         recall_all += len(labels[i])
+
+    if instances == 0:
+        return 0, 0, 0, 0
+
     potential /= instances
     precision /= precision_all
     recall /= recall_all
     F_score = 2 * precision * recall / (precision + recall)
     return potential, precision, recall, F_score
+
 
 def evaulation_pipeline_scores(substitution_words, source_words, gold_words):
     instances = len(substitution_words)
@@ -491,7 +501,6 @@ def main():
     ppdb_model = Ppdb(ppdb_path)
     CGBERT = []
     substitution_words = []
-    valid_mask_labels = []  # To store valid mask labels
     num_selection = args.num_selections
     window_context = 11
 
@@ -545,13 +554,16 @@ def main():
                 CGBERT.append(cgBERT)
                 pre_word = substitution_ranking(mask_words[i], mask_context, cgBERT, fasttext_dico, fasttext_emb, word_count, cgPPDB, tokenizer, model, mask_labels[i])
                 substitution_words.append(pre_word)
-                valid_mask_labels.append(mask_labels[i])
             except Exception as e:
                 print(f"Skipping sentence {i} due to error: {e}")
-                continue  # Skip adding invalid entries
+                CGBERT.append(None)
+                substitution_words.append(mask_words[i])
 
-        # Ensure only valid entries are evaluated
-        potential, precision, recall, F_score = evaulation_SS_scores(CGBERT, valid_mask_labels)
+        # Filter out None values
+        valid_CGBERT = [x for x in CGBERT if x is not None]
+        valid_mask_labels = [x for x in mask_labels if x is not None]
+
+        potential, precision, recall, F_score = evaulation_SS_scores(valid_CGBERT, valid_mask_labels)
         print("The score of evaluation for BERT candidate generation")
         print(potential, precision, recall, F_score)
         output_sr_file.write(str(args.num_selections))
