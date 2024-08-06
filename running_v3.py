@@ -491,6 +491,7 @@ def main():
     ppdb_model = Ppdb(ppdb_path)
     CGBERT = []
     substitution_words = []
+    valid_mask_labels = []  # To store valid mask labels
     num_selection = args.num_selections
     window_context = 11
 
@@ -544,12 +545,13 @@ def main():
                 CGBERT.append(cgBERT)
                 pre_word = substitution_ranking(mask_words[i], mask_context, cgBERT, fasttext_dico, fasttext_emb, word_count, cgPPDB, tokenizer, model, mask_labels[i])
                 substitution_words.append(pre_word)
+                valid_mask_labels.append(mask_labels[i])
             except Exception as e:
                 print(f"Skipping sentence {i} due to error: {e}")
-                CGBERT.append(None)
-                substitution_words.append(mask_words[i])
+                continue  # Skip adding invalid entries
 
-        potential, precision, recall, F_score = evaulation_SS_scores([x for x in CGBERT if x], [x for x in mask_labels if x])
+        # Ensure only valid entries are evaluated
+        potential, precision, recall, F_score = evaulation_SS_scores(CGBERT, valid_mask_labels)
         print("The score of evaluation for BERT candidate generation")
         print(potential, precision, recall, F_score)
         output_sr_file.write(str(args.num_selections))
