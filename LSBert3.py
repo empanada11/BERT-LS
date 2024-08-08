@@ -43,13 +43,12 @@ class InputFeatures(object):
         self.input_type_ids = input_type_ids
 
 def convert_sentence_to_token(sentence, seq_length, tokenizer):
-    tokenized_text = tokenizer.tokenize(sentence.lower())
-    print(f"Tokenized text: {tokenized_text}")
 
-    nltk_sent = nltk.word_tokenize(sentence.lower())
-    print(f"NLTK tokenized sentence: {nltk_sent}")
+    tokenized_text = tokenizer.tokenize(sentence.lower())
 
     assert len(tokenized_text) < seq_length-2
+
+    nltk_sent = nltk.word_tokenize(sentence.lower())
 
     position2 = []
 
@@ -60,6 +59,7 @@ def convert_sentence_to_token(sentence, seq_length, tokenizer):
     pre_word = ""
 
     for i,word in enumerate(nltk_sent):
+
         if word=="n't" and pre_word[-1]=="n":
             word = "'t"
 
@@ -80,18 +80,21 @@ def convert_sentence_to_token(sentence, seq_length, tokenizer):
             new_word = tokenized_text[token_index]
 
             while new_word != word:
+
                 token_index += 1
+
                 new_word += tokenized_text[token_index].replace('##','')
+
                 new_pos.append(start_pos+token_index)
+
                 if len(new_word)==len(word):
                     break
             token_index += 1
             pre_word = new_word
+           
             position2.append(new_pos)
-    
-    print(f"Positions: {position2}")
+       
     return tokenized_text, nltk_sent, position2
-
 
 def convert_whole_word_to_feature(tokens_a, mask_position, seq_length, tokenizer, prob_mask):
     """Loads a data file into a list of `InputFeature`s."""
